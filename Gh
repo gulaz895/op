@@ -1,0 +1,249 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+
+local selectedTarget = nil
+local attacking = false
+local skillSequence = {1,3,2,4}
+local skillIndex = 1
+local attackDistance = 2 -- ระยะเข้าใกล้ผู้เล่น
+
+-- ฟังก์ชันกดสกิล
+local function pressSkill(skillNumber)
+    local key = Enum.KeyCode.One
+    if skillNumber == 1 then key = Enum.KeyCode.One
+    elseif skillNumber == 2 then key = Enum.KeyCode.Two
+    elseif skillNumber == 3 then key = Enum.KeyCode.Three
+    elseif skillNumber == 4 then key = Enum.KeyCode.Four end
+    UserInputService.InputBegan:Fire({UserInputType = Enum.UserInputType.Keyboard, KeyCode = key}, false)
+    wait(0.1)
+    UserInputService.InputEnded:Fire({UserInputType = Enum.UserInputType.Keyboard, KeyCode = key}, false)
+end
+
+-- ฟังก์ชันเข้าใกล้เป้าหมาย
+local function moveToTarget(target)
+    if not target.Character then return end
+    local torso = target.Character:FindFirstChild("HumanoidRootPart")
+    local myTorso = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not torso or not myTorso then return end
+
+    while attacking and (myTorso.Position - torso.Position).Magnitude > attackDistance do
+        local direction = (torso.Position - myTorso.Position).Unit
+        myTorso.CFrame = CFrame.new(myTorso.Position + direction)
+        wait(0.1)
+    end
+end
+
+-- ฟังก์ชันบินรอบตัว
+local function flyAround(target)
+    local torso = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+    local myTorso = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not torso or not myTorso then return end
+
+    local radius = 5
+    local height = 5
+    local angle = 0
+
+    while attacking and target do
+        angle = angle + math.rad(5)
+        local x = math.cos(angle) * radius
+        local z = math.sin(angle) * radius
+        local newPos = torso.Position + Vector3.new(x, height, z)
+        myTorso.CFrame = CFrame.new(newPos, torso.Position)
+        wait(0.03)
+    end
+end
+
+-- ฟังก์ชันโจมตีอัตโนมัติ
+local function attackTarget(target)
+    if not target then return end
+    attacking = true
+    spawn(function() moveToTarget(target) end)
+    spawn(function() flyAround(target) end)
+
+    while attacking do
+        if target and target:FindFirstChild("Skill4Available") then
+            local skillAvailable = target.Skill4Available.Value
+            if skillAvailable then
+                local skill = skillSequence[skillIndex]
+                pressSkill(skill)
+                skillIndex = skillIndex + 1
+                if skillIndex > #skillSequence then
+                    skillIndex = 1
+                end
+            end
+        end
+        wait(0.5)
+    end
+end
+
+-- สร้าง GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 250, 0, 370)
+frame.Position = UDim2.new(0,15,0,70)
+frame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+frame.Parent = screenGui
+
+-- หัวข้อ
+local title = Instance.new("TextLabel")
+title.Text = "เลือกผู้เล่น"
+title.Size = UDim2.new(1,0,0,40)
+title.BackgroundTransparency = 1
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.Parent = frame
+
+-- ScrollingFrame สำหรับรายชื่อผู้เล่น
+local dropdown = Instance.new("ScrollingFrame")
+dropdown.Size = UDim2.new(1,-20,0,180)
+dropdown.Position = UDim2.new(0,10,0,50)
+dropdown.CanvasSize = UDim2.new(0,0,0,0)
+dropdown.BackgroundColor3 = Color3.fromRGB(50,50,50)
+dropdown.BorderSizePixel = 0
+dropdown.ScrollBarThickness = 8
+dropdown.Parent = frame
+
+-- ปุ่ม Toggle โจมตีอัตโนมัติ
+local attackToggleButton = Instance.new("TextButton")
+attackToggleButton.Size = UDim2.new(1,-20,0,35)
+attackToggleButton.Position = UDim2.new(0,10,0,240)
+attackToggleButton.Text = "โจมตีอัตโนมัติ (Toggle)"
+attackToggleButton.Parent = frame
+
+-- ปุ่มหยุดโจมตีเป้าหมาย
+local stopTargetButton = Instance.new("TextButton")
+stopTargetButton.Size = UDim2.new(1,-20,0,35)
+stopTargetButton.Position = UDim2.new(0,10,0,280)
+stopTargetButton.Text = "หยุดโจมตีเป้าหมาย"
+stopTargetButton.Parent = frame
+
+-- ปุ่มโหมดดินน้ำมัน
+local clayButton = Instance.new("TextButton")
+clayButton.Size = UDim2.new(1,-20,0,35)
+clayButton.Position = UDim2.new(0,10,0,320)
+clayButton.Text = "เปิดโหมดดินน้ำมัน"
+clayButton.Parent = frame
+
+-- Status
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1,-20,0,20)
+statusLabel.Position = UDim2.new(0,10,0,360)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextColor3 = Color3.fromRGB(255,255,0)
+statusLabel.Text = "Status: -"
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextSize = 16
+statusLabel.Parent = frame
+
+-- ปุ่มเปิด/ปิด GUI ขนาดเล็ก แยกจาก GUI หลัก
+local toggleGuiButton = Instance.new("TextButton")
+toggleGuiButton.Size = UDim2.new(0, 100, 0, 40)
+toggleGuiButton.Position = UDim2.new(0, 15, 0, 15)
+toggleGuiButton.Text = "เปิด GUI"
+toggleGuiButton.BackgroundColor3 = Color3.fromRGB(45,45,45)
+toggleGuiButton.TextColor3 = Color3.fromRGB(255,255,255)
+toggleGuiButton.Font = Enum.Font.GothamBold
+toggleGuiButton.TextSize = 16
+toggleGuiButton.Parent = screenGui
+
+toggleGuiButton.MouseButton1Click:Connect(function()
+    frame.Visible = not frame.Visible
+    toggleGuiButton.Text = frame.Visible and "ปิด GUI" or "เปิด GUI"
+end)
+
+-- เติมรายชื่อผู้เล่นและไฮไลต์
+local function refreshPlayerList()
+    for _, child in ipairs(dropdown:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    local yPos = 0
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            local button = Instance.new("TextButton")
+            button.Text = p.Name
+            button.Size = UDim2.new(1,0,0,35)
+            button.Position = UDim2.new(0,0,0,yPos)
+            button.BackgroundColor3 = Color3.fromRGB(70,70,70)
+            button.TextColor3 = Color3.fromRGB(255,255,255)
+            button.Font = Enum.Font.Gotham
+            button.TextSize = 16
+            button.Parent = dropdown
+            yPos = yPos + 40
+
+            button.MouseButton1Click:Connect(function()
+                selectedTarget = p
+                statusLabel.Text = "Status: เลือก "..p.Name
+                for _, btn in ipairs(dropdown:GetChildren()) do
+                    if btn:IsA("TextButton") then
+                        btn.BackgroundColor3 = (btn == button) and Color3.fromRGB(100,200,100) or Color3.fromRGB(70,70,70)
+                    end
+                end
+            end)
+        end
+    end
+    dropdown.CanvasSize = UDim2.new(0,0,0,yPos)
+end
+
+refreshPlayerList()
+
+-- Toggle โจมตีอัตโนมัติ
+attackToggleButton.MouseButton1Click:Connect(function()
+    if attacking then
+        attacking = false
+        attackToggleButton.Text = "โจมตีอัตโนมัติ (Toggle)"
+        statusLabel.Text = "Status: หยุดโจมตี"
+    else
+        if selectedTarget then
+            attackToggleButton.Text = "หยุดโจมตี"
+            spawn(function() attackTarget(selectedTarget) end)
+        else
+            statusLabel.Text = "Status: กรุณาเลือกผู้เล่น"
+        end
+    end
+end)
+
+-- หยุดโจมตีเป้าหมาย
+stopTargetButton.MouseButton1Click:Connect(function()
+    attacking = false
+    attackToggleButton.Text = "โจมตีอัตโนมัติ (Toggle)"
+    statusLabel.Text = "Status: หยุดโจมตีเป้าหมาย"
+end)
+
+-- โหมดดินน้ำมัน
+local clayEnabled = false
+local originalSettings = {}
+
+clayButton.MouseButton1Click:Connect(function()
+    clayEnabled = not clayEnabled
+    clayButton.Text = clayEnabled and "ปิดโหมดดินน้ำมัน" or "เปิดโหมดดินน้ำมัน"
+
+    local camera = workspace.CurrentCamera
+    local lighting = game:GetService("Lighting")
+
+    if clayEnabled then
+        -- บันทึกค่าเดิม
+        originalSettings.Brightness = lighting.Brightness
+        originalSettings.OutdoorAmbient = lighting.OutdoorAmbient
+        originalSettings.ColorCorrection = Instance.new("ColorCorrectionEffect", camera)
+        originalSettings.ColorCorrection.Saturation = -1
+        originalSettings.ColorCorrection.Contrast = 0.2
+
+        -- ปรับให้เป็นดินน้ำมัน
+        lighting.Brightness = 2
+        lighting.OutdoorAmbient = Color3.fromRGB(160,140,120)
+    else
+        -- คืนค่าเดิม
+        lighting.Brightness = originalSettings.Brightness or 1
+        lighting.OutdoorAmbient = originalSettings.OutdoorAmbient or Color3.fromRGB(128,128,128)
+        if originalSettings.ColorCorrection then
+            originalSettings.ColorCorrection:Destroy()
+        end
+    end
+end)
